@@ -1,18 +1,19 @@
 ../.idea
+.idea/
 desktop.ini
+
+# Игнорирование указанных файлов и папок
 .env
-cmd/*.go5
-*.go5
-*/.go5
-
-
-gui/*
-gui/gui.go
-utilities/cpuInfo.go
-
 cpu.prof
 trace.out
-cpuInfo.go
+tree.txt
 
-*.exe
-*.xls
+cmd/alternative.go5
+cmd/backup.go5
+cmd/pullWorkers.go5
+cmd/secret.go5
+cmd/temp.go5
+cmd/test.go5
+cmd/text
+gui/gui.go
+utilities/cpuInfo.go
