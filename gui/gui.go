@@ -8,7 +8,7 @@ import (
 
 func main() {
 	a := app.New()
-	w := a.NewWindow("Моё первое в Fyne приложение")
+	w := a.NewWindow("приложени в Fyne приложение")
 	label := widget.NewLabel("Привет, Fyne!")
 	label2 := widget.NewLabel("Lable2")
 

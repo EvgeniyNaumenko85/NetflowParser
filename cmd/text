@@ -1,0 +1,138 @@
+import (
+	"NetflowParser/models"
+	"NetflowParser/pkg"
+	"NetflowParser/utilities"
+	"fmt"
+	"runtime"
+	"sync"
+	"time"
+)
+
+func main() {
+
+	// Принимаем флаги из консоли
+	filePath, NetFlowRecord, InputFields := pkg.AcceptFlagsFromConsole()
+
+	// Выбираем функцию для парсинга
+	funcNumber, err := utilities.SelectParseFuncNumb(InputFields)
+	if err != nil {
+		fmt.Println(err)
+		return
+	}
+
+	fmt.Println("funcNumber", funcNumber)
+
+	// Открытие файла в режиме чтения
+	file, err := pkg.OpenFileByFilePath(filePath)
+	if err != nil {
+		fmt.Println("Ошибка при открытии файла:", err)
+		return
+	}
+	defer file.Close()
+
+	// Пропуск двоичного заголовка файла (349 байт)
+	headerSize := 349
+	err = pkg.OmittingFileBinHeader(headerSize, file)
+	if err != nil {
+		fmt.Println("Ошибка при перемещении указателя файла:", err)
+		return
+	}
+
+	// Количество горутин для параллельной обработки
+	numWorkers := runtime.NumCPU() * 1000 //todo проверить оптимальное кол-во. горутин
+
+	// Канал для передачи записей между горутинами и главной функцией
+	recordChan := make(chan models.NetFlowRecord)
+
+	//// Канал для передачи количества найденныхзаписей между горутинами и главной функцией
+	counterChan := make(chan uint64, 1000000)
+
+	// Создаем переменную для хранения общего количества найденных записей
+	var counter uint64
+
+	// Ограничитель для дожидания завершения всех горутин
+	wg := sync.WaitGroup{}
+	wg.Add(numWorkers)
+
+	// Запуск горутин для обработки записей
+	startTime := time.Now()
+	//goroutine := 1
+
+	for i := 0; i < numWorkers; i++ {
+
+		//Сравнение значений с заданными параметрами
+		switch funcNumber {
+		case 1:
+			go utilities.ParsBySourceFlag(recordChan, NetFlowRecord, &wg, counterChan)
+		case 2:
+			go utilities.ParsByDestinationFlag(recordChan, NetFlowRecord, &wg, counterChan)
+		case 3:
+			go utilities.ParseSrcDestFlags(recordChan, NetFlowRecord, &wg, counterChan)
+		case 4:
+			go utilities.ParsByAccountIDFlag(recordChan, NetFlowRecord, &wg, counterChan)
+		case 5:
+			go utilities.ParseSrcAccIDFlags(recordChan, NetFlowRecord, &wg, counterChan)
+		case 6:
+			go utilities.ParseDestAccIDFlags(recordChan, NetFlowRecord, &wg, counterChan)
+		case 7:
+			go utilities.ParseSrcDestAccIDFlags(recordChan, NetFlowRecord, &wg, counterChan)
+		case 8:
+			go utilities.ParsByTClassFlag(recordChan, NetFlowRecord, &wg, counterChan)
+		case 9:
+			go utilities.ParsBySrcTClassFlags(recordChan, NetFlowRecord, &wg, counterChan)
+		case 10:
+			go utilities.ParsByDestTClassFlags(recordChan, NetFlowRecord, &wg, counterChan)
+		case 11:
+			go utilities.ParsBySrcDestTClassFlags(recordChan, NetFlowRecord, &wg, counterChan)
+		case 12:
+			go utilities.ParsByAccIdTClassFlags(recordChan, NetFlowRecord, &wg, counterChan)
+		case 13:
+			go utilities.ParsBySrcAccIdTClassFlags(recordChan, NetFlowRecord, &wg, counterChan)
+		case 14:
+			go utilities.ParsByDestAccIdTClassFlags(recordChan, NetFlowRecord, &wg, counterChan)
+		case 15:
+			go utilities.ParsByAllFlags(recordChan, NetFlowRecord, &wg, counterChan)
+		}
+	}
+
+	// Чтение оставшихся данных из файла
+	recordSize := 74
+	recordCount := 0
+
+	for {
+		recordData := make([]byte, recordSize)
+		_, err = file.Read(recordData)
+		if err != nil {
+			// Достигнут конец файла или произошла ошибка чтения
+			break
+		}
+
+		record := pkg.ParseNetFlowRecord(recordData)
+
+		// Отправка записи в канал для обработки горутинами
+		recordChan <- record
+		recordCount++
+	}
+
+	// Закрытие канала после чтения всех записей
+	close(recordChan)
+
+	// Дожидаемся завершения работы всех горутин
+	wg.Wait()
+
+	endTime := time.Now()
+	elapsedTime := endTime.Sub(startTime)
+
+	// Получаем общее количество найденных
+	close(counterChan)
+	for val := range counterChan {
+		counter += val
+	}
+
+	fmt.Printf("\nНайдено  записей: %d со значениями:\n \tsource = %s\n \tdestination = %s\n \taccount_id = %d\n \ttclass = %d\n",
+		counter, NetFlowRecord.Source.String(), NetFlowRecord.Destination.String(),
+		utilities.BytesToUint32LE(NetFlowRecord.AccountID), utilities.BytesToUint32LE(NetFlowRecord.TClass))
+	fmt.Printf("Прочитано %d записей за время %s\n", recordCount, elapsedTime)
+	fmt.Println()
+
+}

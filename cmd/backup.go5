@@ -1,61 +1,28 @@
 package main
 
 import (
-	"NetflowParser/logger"
 	"NetflowParser/models"
 	"NetflowParser/pkg"
 	"NetflowParser/utilities"
 	"fmt"
-	"log"
-	_ "net/http/pprof"
 	"os"
-	"os/signal"
-	"path/filepath"
 	"runtime"
+	"runtime/pprof"
 	"sync"
-	"syscall"
 	"time"
 )
 
 func main() {
 
-	//Логирование
-	logfile, err := logger.LogginResult()
-	if err != nil {
-		log.Fatalf("Ошибка открытия файла лога: %v", err)
-	}
-	defer logfile.Close()
-	log.SetOutput(logfile)
+		f, _ := os.Create("cpu.prof")
+    	pprof.StartCPUProfile(f)
+    	defer pprof.StopCPUProfile()
 
-	//Секрет
-	isValid, err := utilities.CheckSecretExpiration()
-	if err != nil {
-		log.Println("Ошибка при проверке секретной даты:", err)
-		return
-	}
-	if !isValid {
-		log.Println("Секрет не валиден")
-		return
-	}
+    	f1, _ := os.Create("trace.out")
+    	defer f.Close()
 
-	// Канал для сигнализации об окончании обработки
-	done := make(chan string)
-	quit := make(chan os.Signal, 1)
-	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
-
-	//graceful shutdown
-	go func() {
-		<-done
-		<-quit
-
-		//if err := db.CloseDbConnection(); err != nil {
-		//	fmt.Errorf("error occurred on database connection closing: %s", err.Error())
-		//}
-
-		os.Exit(0) // Завершить программу с кодом 0 (успешное завершение)
-		//log.Println("Shutting down")
-		//os.Exit(0) // Завершить программу с кодом 0 (успешное завершение)
-	}()
+    	trace.Start(f1)
+    	defer trace.Stop()
 
 	// Принимаем флаги из консоли
 	filePath, NetFlowRecord, InputFields := pkg.AcceptFlagsFromConsole()
@@ -66,6 +33,8 @@ func main() {
 		fmt.Println(err)
 		return
 	}
+
+	//fmt.Println("funcNumber", funcNumber)
 
 	// Открытие файла в режиме чтения
 	file, err := pkg.OpenFileByFilePath(filePath)
@@ -86,11 +55,11 @@ func main() {
 	// Количество горутин для параллельной обработки
 	numWorkers := runtime.NumCPU() * 100 //todo проверить оптимальное кол-во. горутин
 
-	// Канал для передачи записей между горутинами и главной функцией
-	recordChan := make(chan models.NetFlowRecord, numWorkers*10)
+	// todo Канал для передачи записей между горутинами и главной функцией
+	recordChan := make(chan models.NetFlowRecord, numWorkers)
 
 	// Канал для передачи количества найденныхзаписей между горутинами и главной функцией
-	counterChan := make(chan uint64, numWorkers*10)
+	counterChan := make(chan uint64, numWorkers)
 
 	// Ограничитель для дожидания завершения всех горутин
 	var wg sync.WaitGroup
@@ -99,7 +68,7 @@ func main() {
 	// Запуск учета времени обработки файла
 	startTime := time.Now()
 
-	// Запуск горутины-работники
+	// Запускаем горутины-работники
 	for i := 0; i < numWorkers; i++ {
 		go utilities.Worker(recordChan, NetFlowRecord, &wg, counterChan, funcNumber)
 	}
@@ -133,6 +102,8 @@ func main() {
 	endTime := time.Now()
 	elapsedTime := endTime.Sub(startTime)
 
+	fmt.Println("len counterChan: ", len(counterChan))
+
 	// Создаем переменную для хранения общего количества найденных записей
 	var counter uint64
 
@@ -141,20 +112,9 @@ func main() {
 		counter += val
 	}
 
-	filePath = file.Name()
-	fileName := filepath.Base(file.Name())
-	logfilePath := logfile.Name()
-
-	log.Printf(">---------------\nфайл: %s\nпо адресу: %s\nНайдено записей: %d со значениями:\n\tsource = "+
-		"%s\n\tdestination = %s\n\taccount_id = %d\n\ttclass = %d\nПрочитано: %d записей, за время: %s\n--------------->\n",
-		fileName, filePath, counter, NetFlowRecord.Source.String(), NetFlowRecord.Destination.String(),
-		utilities.BytesToUint32LE(NetFlowRecord.AccountID), utilities.BytesToUint32LE(NetFlowRecord.TClass),
-		recordCount, elapsedTime)
-
-	fmt.Printf("Информация о результате рботы можно посмотреть в файле: %s\n", logfilePath)
-	fmt.Println("Pres any key to quit...")
-
-	exit := ""
-	fmt.Scan(&exit)
-	done <- exit
+	fmt.Printf("\nНайдено  записей: %d со значениями:\n \tsource = %s\n \tdestination = %s\n \taccount_id = %d\n \ttclass = %d\n",
+		counter, NetFlowRecord.Source.String(), NetFlowRecord.Destination.String(),
+		utilities.BytesToUint32LE(NetFlowRecord.AccountID), utilities.BytesToUint32LE(NetFlowRecord.TClass))
+	fmt.Printf("Прочитано %d записей за время %s\n", recordCount, elapsedTime)
+	//fmt.Println("Number of goroutines:", numWorkers)
 }
