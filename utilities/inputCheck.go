@@ -1,10 +1,32 @@
 package utilities
 
 import (
+	"bufio"
 	"fmt"
+	"os"
 	"strconv"
 	"strings"
 )
+
+func CheckFileExists() string {
+	var filePath string
+
+	for {
+		fmt.Print("введите адрес файла или директории: ")
+		scanner := bufio.NewScanner(os.Stdin)
+		if scanner.Scan() {
+			filePath = strings.TrimSpace(scanner.Text())
+
+			_, err := os.Stat(filePath)
+			if !os.IsNotExist(err) {
+				return filePath
+			}
+			fmt.Printf("файл или директория '%s' не существует или адрес некорректен. Пожалуйста, проверьте введенный адрес.\n", filePath)
+		} else {
+			fmt.Println("ошибка при считывании ввода. Пожалуйста, повторите попытку.")
+		}
+	}
+}
 
 func InputCheckIP() string {
 	var inputSource string
@@ -52,6 +74,7 @@ func InputCheckUint32() uint32 {
 			break
 		}
 	}
+
 	targetAccountIDUint64, _ := strconv.ParseUint(userInput, 10, 32)
 	return uint32(targetAccountIDUint64)
 }

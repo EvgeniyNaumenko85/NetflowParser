@@ -1,8 +1,11 @@
 package utilities
 
 import (
+	"NetflowParser/common"
 	"NetflowParser/models"
 	"bytes"
+	"fmt"
+	"log"
 	"sync"
 	"sync/atomic"
 )
@@ -19,7 +22,6 @@ func SelectParseFuncNumb(inputFields [4]int) (int, error) {
 	}
 
 	//todo включить проверку!
-	//проверка наличия хотя бы одного флага
 	if counter == 0 {
 		return 0, models.ErrNoFlags
 	}
@@ -85,8 +87,14 @@ func Worker(recordChan chan models.NetFlowRecord, NetFlowRecord models.NetFlowRe
 	for record := range recordChan {
 		// Вызываем нужную функцию проверки условия
 		if checkFunctions[funcNumber-1](record, NetFlowRecord) {
-			// todo добавляем данные в БД
-			atomic.AddUint64(&counter, 1)
+			// todo  добавляем данные в БД
+			if err := common.AddRecordToDBWithRetry(record, 3); // Максимум 3 попытки записи
+			err != nil {
+				fmt.Println("ошибка при записи в БД: ", err)
+				log.Fatal("ошибка при записи в БД: ", err)
+			} else {
+				atomic.AddUint64(&counter, 1)
+			}
 		}
 	}
 	counterChan <- counter

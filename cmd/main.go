@@ -1,11 +1,13 @@
 package main
 
 import (
+	"NetflowParser/db"
 	"NetflowParser/logger"
 	"NetflowParser/models"
 	"NetflowParser/pkg"
 	"NetflowParser/utilities"
 	"fmt"
+	"github.com/spf13/viper"
 	"log"
 	_ "net/http/pprof"
 	"os"
@@ -22,39 +24,67 @@ func main() {
 	//Логирование
 	logfile, err := logger.LogginResult()
 	if err != nil {
-		log.Fatalf("Ошибка открытия файла лога: %v", err)
+		log.Fatalf("ошибка открытия файла лога: %v", err)
 	}
 	defer logfile.Close()
 	log.SetOutput(logfile)
 
+	err = pkg.LoadEnvVariables()
+	if err != nil {
+		log.Fatalf("ошибка открытия файла лога: %v", err)
+		return
+	}
+
 	//Секрет
 	isValid, err := utilities.CheckSecretExpiration()
 	if err != nil {
-		log.Println("Ошибка при проверке секретной даты:", err)
+		log.Println("ошибка при проверке даты:", err)
 		return
 	}
 	if !isValid {
-		log.Println("Секрет не валиден")
+		log.Println("секрет не валиден")
 		return
 	}
 
+	config := db.Config{
+		DriverName: viper.GetString("dbMySQL.driver"),
+		User:       viper.GetString("dbMySQL.user"),
+		Password:   os.Getenv("DB_PASSWORD"),
+		Protocol:   viper.GetString("dbMySQL.protocol"),
+		Host:       viper.GetString("dbMySQL.host"),
+		Port:       viper.GetString("dbMySQL.port"),
+		DBName:     viper.GetString("dbMySQL.dbname"),
+	}
+
+	//Подключаем БД
+	database := db.StartDbConnection(config)
+
+	fmt.Print("поднимаем таблицу в БД: ")
+	if err = db.Up(database); err != nil {
+		fmt.Printf("Error while migrating tables, err is: %s", err.Error())
+		log.Fatalf("Error while migrating tables, err is: %s", err.Error())
+		return
+	}
+	fmt.Print("успешно")
+	fmt.Println()
+
 	// Канал для сигнализации об окончании обработки
 	done := make(chan string)
-	quit := make(chan os.Signal, 1)
-	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
 
-	//graceful shutdown
+	//Graceful shutdown
 	go func() {
+
+		// Канал для сигнализации об окончании обработки
+		quit := make(chan os.Signal, 1)
+		signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
+
 		<-done
 		<-quit
 
-		//if err := db.CloseDbConnection(); err != nil {
-		//	fmt.Errorf("error occurred on database connection closing: %s", err.Error())
-		//}
+		db.CloseDbConnection(config)
 
-		os.Exit(0) // Завершить программу с кодом 0 (успешное завершение)
-		//log.Println("Shutting down")
-		//os.Exit(0) // Завершить программу с кодом 0 (успешное завершение)
+		log.Println("Shutting down")
+		os.Exit(0)
 	}()
 
 	// Принимаем флаги из консоли
@@ -70,7 +100,7 @@ func main() {
 	// Открытие файла в режиме чтения
 	file, err := pkg.OpenFileByFilePath(filePath)
 	if err != nil {
-		fmt.Println("Ошибка при открытии файла:", err)
+		fmt.Println("ошибка при открытии файла:", err)
 		return
 	}
 	defer file.Close()
@@ -79,18 +109,18 @@ func main() {
 	headerSize := 349
 	err = pkg.OmittingFileBinHeader(headerSize, file)
 	if err != nil {
-		fmt.Println("Ошибка при перемещении указателя файла:", err)
+		fmt.Println("ошибка при перемещении указателя файла:", err)
 		return
 	}
 
 	// Количество горутин для параллельной обработки
-	numWorkers := runtime.NumCPU() * 100 //todo проверить оптимальное кол-во. горутин
+	numWorkers := runtime.NumCPU() * 35 //todo проверить оптимальное кол-во. горутин
 
 	// Канал для передачи записей между горутинами и главной функцией
-	recordChan := make(chan models.NetFlowRecord, numWorkers*10)
+	recordChan := make(chan models.NetFlowRecord, numWorkers*1000)
 
 	// Канал для передачи количества найденныхзаписей между горутинами и главной функцией
-	counterChan := make(chan uint64, numWorkers*10)
+	counterChan := make(chan uint64, numWorkers*1000)
 
 	// Ограничитель для дожидания завершения всех горутин
 	var wg sync.WaitGroup
@@ -112,7 +142,6 @@ func main() {
 		recordData := make([]byte, recordSize)
 		_, err = file.Read(recordData)
 		if err != nil {
-			// Достигнут конец файла или произошла ошибка чтения
 			break
 		}
 
@@ -145,14 +174,7 @@ func main() {
 	fileName := filepath.Base(file.Name())
 	logfilePath := logfile.Name()
 
-	log.Printf(">---------------\nфайл: %s\nпо адресу: %s\nНайдено записей: %d со значениями:\n\tsource = "+
-		"%s\n\tdestination = %s\n\taccount_id = %d\n\ttclass = %d\nПрочитано: %d записей, за время: %s\n--------------->\n",
-		fileName, filePath, counter, NetFlowRecord.Source.String(), NetFlowRecord.Destination.String(),
-		utilities.BytesToUint32LE(NetFlowRecord.AccountID), utilities.BytesToUint32LE(NetFlowRecord.TClass),
-		recordCount, elapsedTime)
-
-	fmt.Printf("Информация о результате рботы можно посмотреть в файле: %s\n", logfilePath)
-	fmt.Println("Pres any key to quit...")
+	pkg.ResultToLog(fileName, filePath, logfilePath, counter, NetFlowRecord, recordCount, elapsedTime)
 
 	exit := ""
 	fmt.Scan(&exit)

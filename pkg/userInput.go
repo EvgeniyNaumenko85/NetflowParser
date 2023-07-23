@@ -11,12 +11,8 @@ import (
 func AcceptFlagsFromConsole() (FilePath string, NetFlowRecord models.NetFlowRecord, InputFields [4]int) {
 	InputFields = [4]int{0, 0, 0, 0}
 
-	// Путь к бинарному файлу статистики NetFlow
-	FilePath = "C:\\Users\\Евгений Науменко\\Desktop\\задание Babylon\\iptraffic_raw_1688454355.utm"
+	FilePath = utilities.CheckFileExists()
 
-	//todo добавить ввод FilePath из консоли
-
-	//Проверяем полученные из консоли данные
 	fmt.Println("нужен ли поиск по флагу `source:` 1 - да / нет?")
 	var sourceField string
 	fmt.Scan(&sourceField)

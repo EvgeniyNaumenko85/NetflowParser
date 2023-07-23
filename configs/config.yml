@@ -1,0 +1,8 @@
+dbMySQL:
+  driver:     "mysql"
+  user:       "user"
+  dbName:     "netflowdb"
+  protocol:   "tcp"
+  host:       "localhost"
+  port:       "3306"
+  param:

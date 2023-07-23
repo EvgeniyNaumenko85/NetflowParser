@@ -4,6 +4,7 @@ desktop.ini
 
 # Игнорирование указанных файлов и папок
 .env
+.timer
 cpu.prof
 trace.out
 tree.txt
@@ -17,3 +18,7 @@ cmd/test.go5
 cmd/text
 gui/gui.go
 utilities/cpuInfo.go
+configs.go
+
+db/Records.mwb.bak
+*.docx
