@@ -26,13 +26,14 @@ func MySQLDBConnect(cfg Config) *sql.DB {
 		cfg.User, cfg.Password, cfg.Protocol, cfg.Host, cfg.Port, cfg.DBName)
 	db, err := sql.Open(cfg.DriverName, dsn)
 	if err != nil {
-		fmt.Println("ошибка при подключении к базе данных: ", err)
+		fmt.Println("ошибка при подключении к базе данных: ", err.Error())
 		log.Fatal("ошибка при подключении к базе данных: ", err.Error())
 	}
 	// Проверка соединения с базой данных
 	err = db.Ping()
 	if err != nil {
-		panic(err.Error())
+		fmt.Println("ошибка при подключении к базе данных: ", err.Error())
+		log.Fatal("ошибка при подключении к базе данных: ", err.Error())
 	}
 	fmt.Println("подключение к БД: успешно")
 	return db

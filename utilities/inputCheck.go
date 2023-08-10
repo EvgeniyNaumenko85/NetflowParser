@@ -12,7 +12,7 @@ func CheckFileExists() string {
 	var filePath string
 
 	for {
-		fmt.Print("введите адрес файла или директории: ")
+		fmt.Println("введите адрес файла или директории: ")
 		scanner := bufio.NewScanner(os.Stdin)
 		if scanner.Scan() {
 			filePath = strings.TrimSpace(scanner.Text())

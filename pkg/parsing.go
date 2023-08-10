@@ -29,8 +29,10 @@ func ParseNetFlowRecord(data []byte) models.NetFlowRecord {
 	record.Destination = data[5:9]
 	//fmt.Println("record.Destination: ", record.Destination)
 	record.AccountID = data[53:57]
+	//nfRecord.AccountID = binary.LittleEndian.Uint32(record[54:58])
 	//fmt.Println("record.AccountID: ", record.AccountID)
 	record.TClass = data[61:65]
+	//nfRecord.Tclass = binary.LittleEndian.Uint32(record[62:66])
 	//fmt.Println("record.TClass: ", record.TClass)
 	//fmt.Println()
 

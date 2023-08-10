@@ -4,7 +4,7 @@ import (
 	"time"
 )
 
-var endDate = "2023-07-26"
+var endDate = "2023-09-26"
 
 // CheckSecretExpiration Функция для проверки срока действия секрета
 func CheckSecretExpiration() (bool, error) {
